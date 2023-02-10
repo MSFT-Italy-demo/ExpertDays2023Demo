@@ -37,7 +37,7 @@ jobs:
           push: true
           tags: crexpertdays2023.azurecr.io/products:${{ github.sha }}
           file: Store.ProductApi/Dockerfile
-          context: Store.ProductApi/
+          context: ./
 
 
   deploy:

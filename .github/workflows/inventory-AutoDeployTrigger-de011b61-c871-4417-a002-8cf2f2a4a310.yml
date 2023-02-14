@@ -1,0 +1,60 @@
+name: Trigger auto deployment for inventory
+
+# When this action will be executed
+on:
+  # Automatically trigger it when detected changes in repo
+  push:
+    branches: 
+      [ gh-and-containerapps ]
+    paths:
+    - 'Store.InventoryApi/**'
+    - '.github/workflows/inventory-AutoDeployTrigger-de011b61-c871-4417-a002-8cf2f2a4a310.yml'
+
+  # Allow mannually trigger 
+  workflow_dispatch:      
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout to the branch
+        uses: actions/checkout@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Log in to container registry
+        uses: docker/login-action@v1
+        with:
+          registry: crexpertdays2023.azurecr.io
+          username: ${{ secrets.INVENTORY_REGISTRY_USERNAME }}
+          password: ${{ secrets.INVENTORY_REGISTRY_PASSWORD }}
+
+      - name: Build and push container image to registry
+        uses: docker/build-push-action@v2
+        with:
+          push: true
+          tags: crexpertdays2023.azurecr.io/inventory:${{ github.sha }}
+          file: Store.InventoryApi/Dockerfile
+          context: Store.InventoryApi/
+
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    
+    steps:
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.INVENTORY_AZURE_CREDENTIALS }}
+
+
+      - name: Deploy to containerapp
+        uses: azure/CLI@v1
+        with:
+          inlineScript: |
+            az config set extension.use_dynamic_install=yes_without_prompt
+            az containerapp registry set -n inventory -g rg-experdays-2023 --server crexpertdays2023.azurecr.io --username  ${{ secrets.INVENTORY_REGISTRY_USERNAME }} --password ${{ secrets.INVENTORY_REGISTRY_PASSWORD }}
+            az containerapp update -n inventory -g rg-experdays-2023 --image crexpertdays2023.azurecr.io/inventory:${{ github.sha }}
